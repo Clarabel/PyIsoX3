@@ -52,11 +52,6 @@ try:
                 print('bye!')
                 continuer = False
                 break
-##            elif event.type == pygame.KEYDOWN and\
-##                 event.key == pygame.K_RETURN:
-##                map_diag = (game_map.width+game_map.height)
-##                all_map_pic.append(pygame.Surface((32*map_diag, 16*map_diag)).convert())
-##                print("il y a", len(all_map_pic), 'images dans la liste')
             elif event.type == pygame.KEYDOWN:
                 dx, dy = 0, 0
                 if event.key == pygame.K_DOWN:
@@ -78,9 +73,6 @@ try:
                             sprite.add(all_sprites)
                             
                 cursor.move(dx, dy)
-##                for spr in all_sprites:
-##                    spr.rect.move_ip(dx, dy)
-##                    spr.dirty = 1
         all_sprites.change_layer(cursor, 2*(cursor.x+cursor.y)+1)
         rects = all_sprites.draw(all_map_surf)
         #all_map_surf.blit(cursor.image, cursor.rect)
