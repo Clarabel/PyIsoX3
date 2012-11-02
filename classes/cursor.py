@@ -11,9 +11,13 @@ class Cursor(pygame.sprite.DirtySprite):
         self.image = surf
         self.dirty = 2
         self.rect = surf.get_rect()
+<<<<<<< HEAD
         self.last_pos = None
 
         
+=======
+
+>>>>>>> origin/master
 class EditorCursor(Cursor):
 
     def __init__(self, surf):
@@ -24,9 +28,12 @@ class EditorCursor(Cursor):
         self.map = None
 
     def update(self, all_sprites):
+<<<<<<< HEAD
         if self.last_pos == self.pos:
             return
         self.last_pos = self.pos
+=======
+>>>>>>> origin/master
         startx = self.map.startx
         self.rect.x = startx + 32*(self.x-self.y)
         self.rect.y = 16*(self.x+self.y) \

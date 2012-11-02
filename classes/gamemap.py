@@ -62,9 +62,14 @@ class GameMap:
         for tile in self.tiles:
             if tile.x == x and tile.y == y:
                 tile.kill()
+<<<<<<< HEAD
                 break
         sprite = self.new_tile(x, y)
         return sprite
+=======
+                sprite = self.new_tile(x, y)
+                return sprite
+>>>>>>> origin/master
 
     def get_tile_infos(self, x, y):
         tileset = self.get_tileset(x, y)
