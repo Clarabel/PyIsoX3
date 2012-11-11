@@ -26,12 +26,28 @@ def load_tileset(tileset):
         Tilesets[tileset] = surf
     return surf
 
-def load_cursor(filename, colorkey=-1):
-    surf = load_image('cursor', filename)
-    surf = surf.convert()
-    if colorkey == -1:
+Characters = {}
+def load_character(character):
+    #not yet
+    "load cached tileset or draw and cache a new one"
+    surf = Characters.get(character, None)
+    if not surf:
+        surf = load_image('Characters', character)
         colorkey = surf.get_at((0,0))
+        surf.set_colorkey(colorkey, pygame.RLEACCEL)
+        surf = surf.convert_alpha()
+        Characters[character] = surf
+    return surf
+
+def load_cursor(filename, h=1, colorkey=-1):
+    curs = load_image('cursor', filename)
+    if colorkey == -1:
+        colorkey = curs.get_at((0,0))
+    curs.set_alpha(155)
+    surf = load_mask(h)
+    surf.blit(curs, (0,0), special_flags=pygame.BLEND_RGBA_MIN)
     surf.set_colorkey(colorkey, pygame.RLEACCEL)
+    #surf.set_alpha(155)
     return surf#.convert_alpha()
 
 
@@ -52,7 +68,9 @@ def draw_tile(tileset, ref, h):
     surf = load_mask(h)
     tile_src = tileset_img.subsurface(rect)
     surf.blit(tile_src, (0,0), special_flags=pygame.BLEND_RGBA_MIN)
+    surf.fill((0,0,0,0), ((0, 64), (64, 344)))
     return surf
+
 
 Masks = {}
 
@@ -67,6 +85,21 @@ def load_mask(h):
         mask = mask.convert_alpha()
         Masks[h] = mask
     return mask.copy()
+
+def load_windowskin(skin):
+    return load_image('windowskin', skin)
+        
+Iconeset = None
+def iconset():
+    if not surf:
+        Iconeset = load_image('icones', 'iconeset.png')
+    return Iconeset
+
+def face(face_name):
+    pass
+
+def character(character_name):
+    pass
 
 if __name__ == "__main__":
     import pygame, os
