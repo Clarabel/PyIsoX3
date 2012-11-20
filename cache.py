@@ -69,7 +69,7 @@ def draw_tile(tileset, ref, h):
     tile_src = tileset_img.subsurface(rect)
     surf.blit(tile_src, (0,0), special_flags=pygame.BLEND_RGBA_MIN)
     surf.fill((0,0,0,0), ((0, 64), (64, 344)))
-    return surf
+    return surf.convert_alpha()
 
 
 Masks = {}
@@ -87,7 +87,7 @@ def load_mask(h):
     return mask.copy()
 
 def load_windowskin(skin):
-    return load_image('windowskin', skin)
+    return load_image('windowskin', skin).convert_alpha()
         
 Iconeset = None
 def iconset():

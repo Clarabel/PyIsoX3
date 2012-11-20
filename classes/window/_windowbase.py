@@ -11,7 +11,7 @@ class Window(pygame.sprite.Sprite):
 
     def __init__(self, x, y, width, height):
         pygame.sprite.Sprite.__init__(self)
-        self.image = Surface((width, height)).convert_alpha()
+        self.image = Surface((width, height)).convert(32, pygame.RLEACCEL)
         self._windowskin = None
         self.rect = Rect(x, y, width, height)
         self.selected_rect = None
@@ -20,18 +20,23 @@ class Window(pygame.sprite.Sprite):
     @property
     def offset(self):
         return 16
-    
 
     @property
+    def screen_pos(self):
+        pos = self.rect.topleft
+        return (pos[0] + self.offset, pos[1] + self.offset)
+    
+    @property
     def font(self):
-        try:
-            return self._font
-        except AttributeError:
+        if not hasattr(self, '_font'):
             self._font = pygame.font.Font(None, 24)
         return self._font
-    
+    @font.setter
+    def font(self, value):
+        self._font = value
+        
     def create_contents(self):
-        w, h = self.rect.inflate(-32, -32).size
+        w, h = self.rect.inflate(-2*self.offset, -2*self.offset).size
         self.contents = Surface((w, h)).convert_alpha()
         self.font_color = (255,255,255)
 
@@ -69,15 +74,28 @@ class Window(pygame.sprite.Sprite):
 
     def draw(self, destsurf):
         destsurf.blit(self.image, self.rect)
-        
         self.draw_selected(destsurf)
-        destsurf.blit(self.contents, self.rect.move(self.offset, self.offset))
+        destsurf.blit(self.contents, self.rect.move(self.offset, self.offset),
+                                      self.contents_src)
         
     def add_widget(self, widget):
         self.widgets.append(widget)
         widget.parent = self
         widget.parent_offset = self.offset
-        
+
+    @property
+    def contents_size(self):
+        width, height = self.rect.inflate(-2*self.offset, -2*self.offset).size
+        return width, height
+    @property
+    def contents_rect(self):
+        "return the visible rect of contents"
+        return self.rect.inflate(-2*self.offset, -2*self.offset)
+    @property
+    def contents_src(self):
+        return self.contents.get_rect()
+
+    
 class WindowUser(Window):
     """super class for WindowInput and WindowConfirm"""
     def __init__(self, contents_w, contents_h):
@@ -114,14 +132,6 @@ class WindowUser(Window):
         self.valider_rect = Rect(width-100-10, height-32, 100, 26)
         self.contents.blit(self.annuler, self.annuler_rect)
         self.contents.blit(self.valider, self.valider_rect)
-
-    @property
-    def contents_size(self):
-        width, height = self.rect.inflate(-2*self.offset, -2*self.offset).size
-        return width, height
-    @property
-    def contents_rect(self):
-        return self.rect.inflate(-2*self.offset, -2*self.offset)
     
     @property
     def offsettext(self):

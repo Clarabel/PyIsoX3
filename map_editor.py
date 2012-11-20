@@ -1,9 +1,9 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
-import pygame, pickle, os
+import pygame, pickle, os, re
 from pygame.locals import *
 import classes.gamemap as gamemap
-import classes.database as db
+from classes.database import DataBase, DataMap
 from classes.cursor import EditorCursor
 from classes.window import *
 import cache
@@ -11,13 +11,22 @@ import time
 
 
 class EditorIso(object):
-
-    def __init__(self, screen_size = (1580, 856), mapsize=(1024, 768)):
+    
+    COLOR_BGD=0x60a7ff
+    SCREEN_MAP_POS = (12, 44)
+    DEFAULT_SCREEN_SIZE = (1024, 768)
+    DEFAULT_MAP_SCREEN_SIZE = (728, 600)
+    
+    def __init__(self, screen_size=None, mapsize=None):
+        if not screen_size:
+            screen_size = EditorIso.DEFAULT_SCREEN_SIZE
+        if not mapsize:
+            mapsize = EditorIso.DEFAULT_MAP_SCREEN_SIZE
         #set the display screen
         self.init_display(screen_size)
         #map frame
         self.mapsize = mapsize
-        self.map_screen_rect = Rect((12,44), self.mapsize)
+        self.map_screen_rect = Rect(EditorIso.SCREEN_MAP_POS, self.mapsize)
 
     def init_display(self, screen_size):
         screen = pygame.display.get_surface()
@@ -29,7 +38,7 @@ class EditorIso(object):
                                      pygame.HWSURFACE |\
                                      pygame.DOUBLEBUF,
                                      32)
-        self.screen_size = self.screen.get_size()
+        self.screen_size = screen_size
                 
     def set_map(self, name='', data=None):
         if name:
@@ -37,16 +46,15 @@ class EditorIso(object):
         elif data:
             self.datamap = data
         else:
-            #no data, no map
             return
         self.map = gamemap.GameMap(self.datamap)
         self.map.draw_tiles()
         #create cursor
         self.cursor = EditorCursor(self.map)
-
+        
     def new_map(self, screen):
         #create a new map
-        new_data = db.DataMap()
+        new_data = DataMap()
         win_new_map = WindowNewMap(new_data)
         pygame.display.get_surface()
         pygame.event.clear()
@@ -62,43 +70,38 @@ class EditorIso(object):
             pygame.display.flip()
             pygame.time.Clock().tick(60)
         if result:
-            print('nouvelle map')
             data = win_new_map.new_data
             self.set_map(data=data)
             
     def init_windows(self):
         windows = {}
-        windows['thumb'] = WindowTile(self.map)
         windows['tilesets'] = WindowTileset(self.map)
+        windows['thumb'] = WindowThumbTile(windows['tilesets'])
+        windows['map'] = WindowMap(self.map_screen_rect.size, self.map)
+        windows['name'] = WindowNameMap(self.map_screen_rect.w, 40)
         for window in windows.values():
             window.draw(self.screen)
         return windows
             
-    def write_name(self, screen, rect):
+    def write_name(self):
         "write the name of the map and return rect"
-        w = rect.w
-        h = rect.y
-        x = rect.x
-        screen.fill((212,191,18), (x, 0, w, h))
+        w = self.map_screen_rect.w
+        h = self.map_screen_rect.y
+        x = self.map_screen_rect.x
+        self.screen.fill((212,191,18), (x, 0, w, h))
         title_font = pygame.font.SysFont("timesnewroman", 40,
                                          bold=True, italic=True)
         title_surf = title_font.render(self.map.name, 1, (115,58,179))
         wt, ht = title_surf.get_size()
-        title_rect = screen.blit(title_surf, ((w-wt)/2, (h-ht)/2))
+        title_rect = self.screen.blit(title_surf, ((w-wt)/2, (h-ht)/2))
         return title_rect
-        
-    def modifie_sol(self, key):
-        "modifie le sol avec PAGEUP et PAGEDOWN"
-        dref = (pygame.K_PAGEUP == key) - (pygame.K_PAGEDOWN == key)
-        
-        ref = self.map.get_tileref(x, y)
-        self.map.set_tileref(ref + dref, x, y)
 
-    def modifie_height(self, dh):
-        "modifie la hauteur avec les touches PLUS et MINUS"
-        x, y = self.cursor.pos
-        h = self.cursor.h
-        self.map.set_height(h + dh, x, y)
+    def load_map(self):
+        maps_names = []
+        for datamap in DataBase.maps:
+            maps_names.append(datamap.name)
+        n = WindowChoices(maps_names).loop()
+        self.set_map(data=DataBase.maps[n])
         
     def load_mapdata(self, name):
         filename = os.path.join('data', 'maps', name)
@@ -106,13 +109,13 @@ class EditorIso(object):
             data_map = pickle.load(f)
         return data_map
 
-    def save_mapdata(self, name):
-        data = self.map.data
-        filename = os.path.join('data', 'maps', name)
-        with open(filename, 'w') as f:
-            pickle.dump(data, f)
+    def save_mapdata(self):
+        filename = self.map.data.get_filename()
+        text = "Enregistrer la carte %s ?"%(filename[:-4])
+        if WindowConfirm(text).loop():
+            self.map.data.save()
             
-    def rename_map(self, rect):
+    def rename_map(self):
         screen = pygame.display.get_surface()
         name_input = WindowInput(self.map.name)
         new_name = None
@@ -127,115 +130,113 @@ class EditorIso(object):
                     break
         if new_name:
             self.map.name = new_name
-            
-        self.write_name(screen, rect)
-        
-    def set_square_infos(self, *tile_infos):
-        x, y = self.cursor.pos
-        self.map.set_tile_infos(x, y, *tile_infos)
-
+        return new_name
+    
     def set_tile_infos(self, win_thumb):
-        x, y = self.cursor.pos
-        tileset, ref, h = self.map.get_tile_infos(x, y)
-        win_thumb.update(tileset, ref, h)
+        "set cursor square infos to win_thumb infos"
+        win_thumb.tile_infos = self.cursor.square_infos
         
+                
+##    def modifie_sol(self, key):
+##        "modifie le sol avec PAGEUP et PAGEDOWN"
+##        dref = (pygame.K_PAGEUP == key) - (pygame.K_PAGEDOWN == key)
+##        ref = self.map.get_tileref(x, y)
+##        self.map.set_tileref(ref + dref, x, y)
+
+        
+            
+ 
+            
     def main(self):
         """main loop of editor"""
         #screen initialise
         screen = self.screen
-        map_screenrect = self.map_screen_rect
-        map_w, map_h = self.map_screen_rect.size
-        map_screen = self.screen.subsurface(map_screenrect)
-        screen_w, screen_h = self.screen.get_size()
+        map_screen = self.screen.subsurface(self.map_screen_rect)
         #rect of the view
-        screen_rect = map_screenrect.copy()
-        real_x, real_y = 16*screen_rect.x, 16*screen_rect.y
+        screen_rect = self.map_screen_rect.copy()
         #orange background
-        self.screen.fill((212,112,18))
+        self.screen.fill(EditorIso.COLOR_BGD)
         #initialise event
         pygame.event.clear()
         pygame.key.set_repeat(200, 50)
         #thumb & tile window
+        
         windows = self.init_windows()
         #Name of the map
-        title_rect = self.write_name(screen, map_screenrect)
         
         pygame.display.flip()
         continuer = True
         #initialise state button
         map_left_button_pressed = False
+        start_time = time.time()
+        horloge = pygame.time.Clock()
         while continuer:
-            
             for event in pygame.event.get():
                 ctrl = pygame.key.get_mods() & KMOD_CTRL
                 if event.type == pygame.QUIT or\
                    event.type == KEYDOWN and event.key == K_ESCAPE:
                     continuer = False
-                    pygame.quit()
                     return
                 elif event.type == MOUSEMOTION:
-                    if pygame.mouse.get_pressed()[1]:
-                        screen_rect.move_ip(event.rel)
-                    if map_screenrect.collidepoint(event.pos):
-                        x, y = event.pos
-                        x -= screen_rect.x + map_screenrect.x
-                        y -= screen_rect.y + map_screenrect.y
-                        self.cursor.move_to_screen(x, y)
+                    if self.map_screen_rect.collidepoint(event.pos):
+                        if pygame.mouse.get_pressed()[1]:
+                            screen_rect.move_ip(event.rel[0], event.rel[1])
+                        elif not('last_roll'in locals() and\
+                                time.time() - last_roll < 0.5):
+                            x, y = event.pos
+                            x -= screen_rect.x
+                            x -= windows['map'].contents_rect.x
+                            y -= screen_rect.y
+                            y -= windows['map'].contents_rect.y
+                            self.cursor.move_to_screen(x, y)
                         
                 elif event.type == MOUSEBUTTONDOWN:
-                    key = event.button
-                    if windows['tilesets'].onclick(event):
-                        tset = windows['tilesets'].tileset
-                        ref = windows['tilesets'].tileref
-                        windows['tilesets'].draw(screen)
-                        windows['thumb'].update(tileset=tset, ref=ref)
-                    elif event.button in [4, 5]:
-                        if windows['thumb'].rect.collidepoint(event.pos):
-                            dh = 1*(key == 5) - 1*(key == 4)
-                            h = windows['thumb'].h + dh
-                            windows['thumb'].update(h=h)
-                        elif map_screen.get_rect().collidepoint(event.pos):
-                            b = event.button
-                            dh = (5 == b) - (4 == b)
-                            self.modifie_height(dh)
+                    button = event.button
+                    if windows['tilesets'].onclick(event) or\
+                       windows['thumb'].update_onclick(event):
+                        pass
+                    elif windows['map'].rect.collidepoint(event.pos):
+                        if button in [4, 5]:
+                            last_roll = time.time()
+                            dh = (5 == button) - (4 == button)
+                            self.cursor.h += dh
                             x, y = event.pos
                             y -= 8*dh
                             pygame.mouse.set_pos([x,y])
-                    elif event.button == 1 and\
-                         map_screen.get_rect().collidepoint(event.pos):
-                        map_left_button_pressed = True
-                    elif event.button == 3:
-                        if map_screenrect.collidepoint(event.pos):    
-                            x, y = self.cursor.pos
-                            tileset, ref, h = self.map.get_tile_infos(x, y)
-                            windows['thumb'].update(tileset, ref, h)
-                        elif title_rect.collidepoint(event.pos):
-                            self.rename_map(map_screenrect)
+                        elif button == 3:
+                            self.set_tile_infos(windows['thumb'])
+                        elif button == 1 :
+                            map_left_button_pressed = True 
+                    elif windows['name'].rect.collidepoint(event.pos):
+                        self.rename_map()
 
-                elif event.type == MOUSEBUTTONUP and\
-                     event.button == 1:
+                elif event.type == MOUSEBUTTONUP and event.button == 1:
                     map_left_button_pressed = False
                 elif pygame.key.get_pressed()[K_SPACE]:
                         map_left_button_pressed = True
                 elif event.type == KEYDOWN:
                     key = event.key
-                    if event.key == K_s and ctrl:
-                        text = "Enregistrer la carte %s ?"%('map001.pxs'[:-4])
-                        if WindowConfirm(text).loop():
-                            self.save_mapdata('map001.pxs')
+                    if key == K_F11:
+                        pygame.display.toggle_fullscreen()
+                    elif event.key == K_s and ctrl:
+                        self.save_mapdata()
+                    elif event.key == K_l and ctrl:
+                        self.load_map()
+                        windows['map'].map = self.map
                     elif ctrl and event.key == K_n :
                         self.new_map(screen)
+                        windows['map'].map = self.map
                     elif key == K_q and ctrl:
                        pygame.event.post(pygame.event.Event(QUIT, {}))
                     elif key in [K_DOWN, K_UP, K_LEFT, K_RIGHT]:
                         self.cursor.update(event)
                     elif key in [K_KP_PLUS, K_KP_MINUS]:
                         dh = (K_KP_PLUS == key) - (K_KP_MINUS == key)
-                        self.modifie_height(dh)
+                        self.cursor.h += dh
                     elif key == K_c:
                         self.set_tile_infos(windows['thumb'])
                     elif key == K_v:
-                        self.set_square_infos(windows['thumb'].tile_infos)
+                        self.cursor.square_infos = windows['thumb'].tile_infos
                 elif event.type == KEYUP:
                     if event.key == K_SPACE:
                         map_left_button_pressed = False
@@ -243,27 +244,26 @@ class EditorIso(object):
                 #left clic on the map
                 tset, tref, h = windows['thumb'].tile_infos
                 if not(ctrl):
-                    x, y = self.cursor.pos
                     h = self.cursor.h
-                self.set_square_infos( tset, tref, h)
-                        
-            #draw all tiles and cursor on map
-            map_screen.fill((211, 188,100))
-            ox, oy = screen_rect.topleft
-            for tile in self.map.tiles:
-                tile_rect = tile.rect.move(ox, oy)
-                map_screen.blit(tile.image, tile_rect, tile.source_rect)
-                if tile.x == self.cursor.x and tile.y == self.cursor.y:
-                    map_screen.blit(self.cursor.image,tile_rect)
+                self.cursor.square_infos = tset, tref, h
+            windows['name'].update(self.map.name)
+            windows['map'].update(screen_rect, self.cursor)
+            
+            for win in windows.values():
+                win.draw(screen)
             pygame.display.flip()
-            pygame.time.Clock().tick(60)
+            horloge.tick(60)
 
+            
 if __name__ == '__main__':
     pygame.init()
     try:
-        editor = EditorIso(screen_size = (1580, 856), mapsize = (1024, 768))
-        editor.set_map('map001.pxs')
+        screen = pygame.display.set_mode((1024, 768))
+        editor = EditorIso(screen_size = (1024, 768), mapsize = (728, 600))
+        editor.load_map()
         editor.main()
+        pygame.quit()
     except:
         pygame.quit()
         raise
+    

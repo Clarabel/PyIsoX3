@@ -13,14 +13,121 @@ class Widget(object):
         self.image = pygame.Surface((w, h)).convert_alpha()
         self.font = pygame.font.Font(None, 24)
         self.parent = parent
+
+    @property
+    def screen_pos(self):
+        if self.parent:
+            pos = self.parent.screen_pos
+            return (pos[0], pos[1])
         
+    @property
+    def offset(self):
+        return 0
+    @property
+    def x(self):
+        return self.rect.x
+    @x.setter
+    def x(self, x):
+        self.rect.x = x
+    @property
+    def y(self):
+        return self.rect.y
+    @y.setter
+    def y(self, y):
+        self.rect.y = y
+
+    @property
+    def topleft(self):
+        return self.rect.topleft
+    @topleft.setter
+    def topleft(self, topleft):
+        self.rect.topleft = topleft
+        
+    @property
+    def width(self):
+        return self.rect.width
+    
+    @property
+    def height(self):
+        return self.rect.height
     def draw(self, destsurf):
         destsurf.blit(self.image, self.rect)
 
     def update(self, *args, **kwargs):
         pass
 
+
+class ImageBox(Widget):
     
+    @property
+    def image(self):
+        return self._image
+
+    @image.setter
+    def image(self, surf):
+        self._image = surf
+        self.rect.size = surf.get_size()
+
+    
+class TextBox(Widget):
+
+    def __init__(self, x, y, w, h, text="", align='center'):
+        Widget.__init__(self, x, y, w, h, parent=None)
+        self.align = align
+        self.background_color = (0,0,0,0)
+        self.text = text
+
+    @property    
+    def align(self):
+        return self._align
+    
+    @align.setter
+    def align(self, align):
+        "define the align option: vertical then horizontal alignement"
+        ref = {'center':4,
+               'centerleft':1,
+               'centerright':7,
+               'topleft':0,
+               'topright':6,
+               'topcenter':3,
+               'bottomleft':2,
+               'bottomright':8,
+               'bottomcenter':5}
+        self._align = ref.get(align, 0)
+        
+    @property
+    def text(self):
+        "text getter"
+        return self.__dict__.get('_text', None)
+
+    @text.setter
+    def text(self, text):
+        "change the text and redraw the box text"
+        if self.text != text:
+            self._text = text
+            self.draw_text()
+        
+    def draw_text(self):
+        "draw self.text on self.contents"
+        render = self.font.render(self.text, 1, (46, 77, 106))
+        size = render.get_size()
+        v, h = self.align%3, self.align// 3
+        if v == 0:
+            y = 2
+        elif v == 1:
+            y = 2+(self.rect.h - size[1])//2
+        else:
+            y = self.rect.h - size[1] - 2
+        if h == 0:
+            x = 2
+        elif h == 1:
+            x = 2+(self.rect.w - size[0])//2
+        else:
+            x = self.rect.h - size[0] - 2
+        self.image.fill(self.background_color)
+        self.image.blit(render, (x, y))
+
+
 class InputText(Widget):
 
     def __init__(self, x, y, text="", width=None, max_carac=20, parent=None):
@@ -110,8 +217,9 @@ pos the pixel position of curseur"""
             else:
                 self.pretext += event.dict['unicode']
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            rel_pos = (event.pos[0] - self.parent.rect.x-self.parent.offset,
-                       event.pos[1] - self.parent.rect.y-self.parent.offset)
+            pos = self.screen_pos
+            rel_pos = (event.pos[0] - pos[0],
+                       event.pos[1] - pos[1])
             if self.rect.collidepoint(rel_pos):
                 self.active = True
                 self.set_cursor_at(rel_pos[0])
@@ -172,8 +280,9 @@ class InputNumber(Widget):
                 #supprime le premier caractere de posttext"
                 self.number += 1
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            rel_pos = (event.pos[0] - self.parent.rect.x-self.parent.offset,
-                       event.pos[1] - self.parent.rect.y-self.parent.offset)
+            pos = self.parent.screen_pos
+            rel_pos = (event.pos[0] - pos[0],
+                       event.pos[1] - pos[1])
             if self.rect.collidepoint(rel_pos):
                 if event.button == 4:#molette haut
                     self.number += 1
@@ -188,59 +297,110 @@ class InputNumber(Widget):
         self.draw_number()
         Widget.draw(self, destsurf)
 
-class TextBox(Widget):
 
-    def __init__(self, x, y, w, h, text="", align='center'):
-        Widget.__init__(self, x, y, w, h, parent=None)
-        self.align = align
-        self.background_color = (0,0,0,0)
-        self.text = text
+class WidgetBox(Widget):
 
-    @property    
-    def align(self):
-        return self._align
-    @align.setter
-    def align(self, align):
-        "define the align option: vertical then horizontal alignement"
-        ref = {'center':4,
-               'centerleft':1,
-               'centerright':7,
-               'topleft':0,
-               'topright':6,
-               'topcenter':3,
-               'bottomleft':2,
-               'bottomright':8,
-               'bottomcenter':5}
-        self._align = ref.get(align, 0)
+    def __init__(self, x, y):
+        self.widgets = []
+        self.parent = None
+        self.rect = pygame.Rect(0,0,0,0)
+        self.x = x
+        self.y = y
+
+    @property
+    def x(self):
+        return self._x
+    @x.setter
+    def x(self, x):
+        self._x = x
+        for widget in self.widgets:
+            widget.rect.x = x
+            x += widget.width
+    @property
+    def y(self):
+        return self._y
+    @y.setter
+    def y(self, y):
+        self._y = y
+        for widget in self.widgets:
+            widget.y = y
+            y += widget.height
+            
+    def update(self, *args, **kwargs):
+        for widget in self.widgets:
+            widget.update(*args, **kwargs)
+            
+    def add(self, widget):
+        self.widgets.append(widget)
+        widget.parent = self
+
+    def remove(self, widget):
+        self.widgets.remove(widget)
+        if widget.parent == self:
+            widget.parent = None
+            
+    def draw(self, destsurf):
+        for widget in self.widgets:
+            widget.draw(destsurf)
+
+    
+class HorizontalBox(WidgetBox):
+        
+    def add(self, widget):
+        WidgetBox.add(self, widget)
+        widget.rect.topleft = self.rect.topright
+        self.rect.width += widget.width
+        self.rect.height = max(self.widgets, lambda x:x.rect.height)[0].height
+        
+    def remove(self, widget):
+        WidgetBox.remove(self, widget)
+        self.rect.width -= widget.rect.widh
         
     @property
-    def text(self):
-        "text getter"
-        return self.__dict__.get('_text', None)
+    def x(self):
+        return self._x
+    @x.setter
+    def x(self, x):
+        self._x = x
+        for widget in self.widgets:
+            widget.rect.x = x
+            x += widget.width
+    @property
+    def y(self):
+        return self._y
+    @y.setter
+    def y(self, y):
+        self._y = y
+        for widget in self.widgets:
+            widget.y = y
 
-    @text.setter
-    def text(self, text):
-        "change the text and redraw the box text"
-        if self.text != text:
-            self._text = text
-            self.draw_text()
+            
+class VerticalBox(WidgetBox):
         
-    def draw_text(self):
-        "draw self.text on self.contents"
-        render = self.font.render(self.text, 1, (46, 77, 106))
-        size = render.get_size()
-        v, h = self.align%3, self.align// 3
-        if v == 0:
-            y = 2
-        elif v == 1:
-            y = 2+(self.rect.h - size[1])//2
-        else:
-            y = self.rect.h - size[1] - 2
-        if h == 0:
-            x = 2
-        elif h == 1:
-            x = 2+(self.rect.w - size[0])//2
-        else:
-            x = self.rect.h - size[0] - 2
-        self.image.fill(self.background_color)
-        self.image.blit(render, (x, y))
+    def add(self, widget):
+        WidgetBox.add(self, widget)
+        widget.topleft = self.rect.bottomleft
+        self.rect.height += widget.height
+        self.rect.width = max(self.widgets, lambda x:x.rect.width)[0].width
+        
+    def remove(self, widget):
+        WidgetBox.remove(self, widget)
+        self.rect.height -= widget.height
+        
+    @property
+    def x(self):
+        return self._x
+    @x.setter
+    def x(self, x):
+        self._x = x
+        for widget in self.widgets:
+            widget.rect.x = x
+    @property
+    def y(self):
+        return self._y
+    @y.setter
+    def y(self, y):
+        self._y = y
+        for widget in self.widgets:
+            widget.y = y
+            y += widget.height

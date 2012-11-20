@@ -45,27 +45,16 @@ class EditorCursor(Cursor):
     
     @property
     def h(self):
+        "return map height at cursor pos"
         return self.map.get_h(self.x, self.y)
-        return self._h
-##    @h.setter
-##    def h(self, value):
-##        self._h = min(max(0, value), 39)
+    @h.setter
+    def h(self, value):
+        "set map height at cursor pos"
+        self.map.set_height(value, self.x, self.y)
         
     def draw_image(self):
         self.image = cache.load_cursor('iso_editor.bmp', 0)#self.h)
         self.rect.size = self.image.get_size()
-        
-##    def update(self):
-##        if self.last_pos == (self.pos, self.h):
-##            return
-##        self.last_pos = self.pos, self.h
-##        startx = self.map.startx
-##        self.rect.x = startx + 32*(self.x-self.y)
-##        self.rect.y = 16*(self.x+self.y) - 8*self.h
-##        try:
-##            self.h = self.map.get_tile_at(self.x, self.y)
-##        except:
-##            print('cursor upadte error at (%s,%s)'%(self.pos), tile)
             
     def move(self, dx, dy):
         self.x += dx
@@ -89,4 +78,11 @@ class EditorCursor(Cursor):
             elif key == pygame.K_RIGHT:
                 dx = 1
         self.move(dx, dy)
-
+        
+    @property
+    def square_infos(self):
+        return self.map.get_tile_infos(self.x, self.y)
+    @square_infos.setter
+    def square_infos(self, tile_infos):
+        tset, tref, h = tile_infos
+        self.map.set_tile_infos(self.x, self.y, *tile_infos)
